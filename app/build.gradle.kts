@@ -1,6 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val versionProps = Properties().apply {
+    load(rootProject.file("version.properties").inputStream())
 }
 
 android {
@@ -11,8 +17,8 @@ android {
         applicationId = "il.co.natzorlashon.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = versionProps.getProperty("VERSION_CODE").toInt()
+        versionName = versionProps.getProperty("VERSION_NAME")
     }
 
     compileOptions {
@@ -20,6 +26,22 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("direct") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION", "\"direct\"")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION", "\"play\"")
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     signingConfigs {
         create("release") {
