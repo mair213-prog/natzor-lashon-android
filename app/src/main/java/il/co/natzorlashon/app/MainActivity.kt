@@ -1,5 +1,6 @@
 package il.co.natzorlashon.app
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.DownloadManager
@@ -7,6 +8,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -22,12 +24,16 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
+    companion object { @Volatile var isForeground: Boolean = false }
     private lateinit var webView: WebView
     private val appHost = "natzor-lashon.onrender.com"
     private val releasesApi =
@@ -85,6 +91,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                registerFcmTokenWithWeb()
+            }
+
             override fun onReceivedError(
                 view: WebView,
                 request: WebResourceRequest,
@@ -105,6 +116,12 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl("https://natzor-lashon.onrender.com")
         }
 
+        requestNotificationPermissionIfNeeded()
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            getSharedPreferences("natzor_push", MODE_PRIVATE).edit().putString("fcm_token", token).apply()
+            registerFcmTokenWithWeb()
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) webView.goBack() else finish()
@@ -120,6 +137,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isForeground = true
+        registerFcmTokenWithWeb()
         if (
             BuildConfig.DISTRIBUTION == "direct" &&
             pendingUpdateUrl != null &&
@@ -134,12 +153,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onPause() {
+        isForeground = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         try {
             unregisterReceiver(downloadReceiver)
         } catch (_: Exception) {
         }
         super.onDestroy()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1201)
+        }
+    }
+
+    private fun registerFcmTokenWithWeb() {
+        if (!::webView.isInitialized) return
+        val token = getSharedPreferences("natzor_push", MODE_PRIVATE).getString("fcm_token", null) ?: return
+        val quoted = JSONObject.quote(token)
+        webView.post { webView.evaluateJavascript("if(window.registerNativeFcmToken){window.registerNativeFcmToken($quoted)}", null) }
     }
 
     private fun registerDownloadReceiver() {

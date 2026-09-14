@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1047248301077",
+    "project_id": "natzor-lashon",
+    "storage_bucket": "natzor-lashon.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1047248301077:android:8d5355b0739b4cd2fdf21c",
+        "android_client_info": {
+          "package_name": "il.co.natzorlashon.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBisKYr0VVD2iac4yv6qVM2efrqEjS5Xhw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
