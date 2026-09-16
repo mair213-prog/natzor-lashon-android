@@ -3,6 +3,7 @@ package il.co.natzorlashon.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.NotificationManager
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -15,6 +16,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -72,6 +74,7 @@ class MainActivity : AppCompatActivity() {
             userAgentString = "$userAgentString NatzorLashonAndroid/${BuildConfig.VERSION_NAME}"
         }
 
+        webView.addJavascriptInterface(NotificationBridge(), "NatzorNative")
         webView.webChromeClient = WebChromeClient()
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -164,6 +167,28 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
         super.onDestroy()
+    }
+
+    inner class NotificationBridge {
+        @JavascriptInterface
+        fun openNotificationSettings() {
+            runOnUiThread {
+                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1201)
+                } else {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                    }
+                    startActivity(intent)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun notificationsEnabled(): Boolean {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            return if (Build.VERSION.SDK_INT >= 24) nm.areNotificationsEnabled() else true
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
