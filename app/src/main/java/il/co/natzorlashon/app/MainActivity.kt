@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingUpdateUrl: String? = null
     private var pendingUpdateVersion: String? = null
     private var downloadId: Long = -1L
+    private var waitingForNotificationSettings = false
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -142,6 +143,10 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         isForeground = true
         registerFcmTokenWithWeb()
+        if (waitingForNotificationSettings) {
+            waitingForNotificationSettings = false
+            notifyWebNotificationPermissionState()
+        }
         if (
             BuildConfig.DISTRIBUTION == "direct" &&
             pendingUpdateUrl != null &&
@@ -173,21 +178,50 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun openNotificationSettings() {
             runOnUiThread {
+                if (areAppNotificationsEnabled()) {
+                    notifyWebNotificationPermissionState()
+                    return@runOnUiThread
+                }
                 if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1201)
                 } else {
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                    }
-                    startActivity(intent)
+                    openAppNotificationSettings()
                 }
             }
         }
 
         @JavascriptInterface
-        fun notificationsEnabled(): Boolean {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            return if (Build.VERSION.SDK_INT >= 24) nm.areNotificationsEnabled() else true
+        fun notificationsEnabled(): Boolean = areAppNotificationsEnabled()
+    }
+
+
+    private fun areAppNotificationsEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return if (Build.VERSION.SDK_INT >= 24) nm.areNotificationsEnabled() else true
+    }
+
+    private fun openAppNotificationSettings() {
+        waitingForNotificationSettings = true
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+        startActivity(intent)
+    }
+
+    private fun notifyWebNotificationPermissionState() {
+        if (!::webView.isInitialized) return
+        val enabled = areAppNotificationsEnabled()
+        webView.post { webView.evaluateJavascript("if(window.onNativeNotificationPermissionChanged){window.onNativeNotificationPermissionChanged($enabled)}", null) }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 1201) return
+        if (areAppNotificationsEnabled()) {
+            notifyWebNotificationPermissionState()
+        } else {
+            openAppNotificationSettings()
         }
     }
 
